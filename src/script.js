@@ -17,7 +17,9 @@ const TILE_STATUSES = {
 
 // varialbles declaration
 let boardSize;
+let baseMines;
 let NUMBER_OF_MINES;
+let difficultyMultiplier;
 
 let win;
 let lose;
@@ -35,66 +37,103 @@ startSound.volume = 0.5;
 const lostSound = new Audio("/sfx/Among-Us-Reporting-Body-Sound-Affect.mp3");
 lostSound.volume = 0.5;
 
-// initialize the game, the first move will always safe
-start();
-
 // change the board size
 let data;
-const dropdown = document.getElementById("board-size");
-dropdown.addEventListener("change", (e) => {
-    data = e.target.value;
-    console.log(data);
-    switch (data) {
-        case "0x0":
-            boardSize = 8;
-            NUMBER_OF_MINES = 15;
-            break;
-        case "8x8":
-            boardSize = 8;
-            NUMBER_OF_MINES = 15;
-            break;
-        case "16x16":
-            boardSize = 16;
-            NUMBER_OF_MINES = 40;
-            break;
-        case "20x20":
-            boardSize = 20;
-            NUMBER_OF_MINES = 65;
-            break;
-    }
+let difficultyDropdown;
+let boardSizeDropdown;
 
-    localStorage.setItem("boardSize", boardSize);
-    localStorage.setItem("numberOfMines", NUMBER_OF_MINES);
-
-    board = createBoard(boardSize, NUMBER_OF_MINES);
+document.addEventListener("DOMContentLoaded", () => {
+    // now, you can safely access and initialize these elements
+    difficultyDropdown = document.getElementById("difficulty");
+    boardSizeDropdown = document.getElementById("board-size");
     boardElement = document.querySelector(".board");
-    minesLeftText.textContent = NUMBER_OF_MINES;
 
-    render(board, boardElement, boardSize);
-    checkGameEnd(board);
-    window.location.reload();
+    // add event listeners here
+    difficultyDropdown.addEventListener("change", (e) => {
+        difficultyMultiplier = parseFloat(e.target.value);
+        updateBoardWithNewSettings();
+    });
+
+    boardSizeDropdown.addEventListener("change", (e) => {
+        data = e.target.value;
+        console.log(data);
+        switch (data) {
+            case "8x8":
+                boardSize = 8;
+                baseMines = 15;
+                break;
+            case "10x10":
+                boardSize = 10;
+                baseMines = 25;
+                break;
+            case "12x12":
+                boardSize = 12;
+                baseMines = 35;
+                break;
+            case "16x16":
+                boardSize = 16;
+                baseMines = 40;
+                break;
+            case "20x20":
+                boardSize = 20;
+                baseMines = 65;
+                break;
+            default:
+                boardSize = 8;
+                baseMines = 15;
+        }
+        updateBoardWithNewSettings();
+    });
+
+     // initialize the game, the first move will always safe
+    start();
 });
 
-function start() {
-    const savedBoardSize = parseInt(localStorage.getItem("boardSize"));
-    const savedNumberOfMines = parseInt(localStorage.getItem("numberOfMines"));
-    if (savedBoardSize) {
-        boardSize = savedBoardSize;
-    } else {
-        boardSize = 8;
-    }
-    if (savedNumberOfMines) {
-        NUMBER_OF_MINES = savedNumberOfMines;
-    } else {
-        NUMBER_OF_MINES = 15;
-    }
+function updateBoardWithNewSettings() {
+    // save updated settings to localStorage
+    localStorage.setItem("boardSize", boardSize);
+    localStorage.setItem("numberOfMines", baseMines);
+    localStorage.setItem("difficultyMultiplier", difficultyMultiplier);
 
+    // recalculate mines with difficulty multiplier
+    NUMBER_OF_MINES = Math.floor(baseMines * difficultyMultiplier);
+
+    // reset game state and re-render board
     win = false;
     lose = false;
     gameHasEnded = false;
 
     board = createBoard(boardSize, NUMBER_OF_MINES);
-    boardElement = document.querySelector(".board");
+    minesLeftText.textContent = NUMBER_OF_MINES;
+    render(board, boardElement, boardSize);
+}
+
+function start() {
+    if (!boardElement) {
+        console.error("Board element not found");
+        return;
+    }
+
+    // load settings from localStorage or set defaults
+    var savedBoardSize = parseInt(localStorage.getItem("boardSize")) || 8;
+    var savedNumberOfMines = parseInt(localStorage.getItem("numberOfMines")) || 15;
+    var savedDifficulty = parseFloat(localStorage.getItem("difficultyMultiplier")) || 1;
+
+    boardSize = savedBoardSize;
+    baseMines = savedNumberOfMines;
+    difficultyMultiplier = savedDifficulty;
+    NUMBER_OF_MINES = Math.floor(baseMines * difficultyMultiplier);
+
+    // update dropdowns to reflect saved settings
+    difficultyDropdown.value = difficultyMultiplier;
+    boardSizeDropdown.value = `${boardSize}x${boardSize}`;
+
+    win = false;
+    lose = false;
+    gameHasEnded = false;
+
+    // initialize the board
+    board = createBoard(boardSize, NUMBER_OF_MINES);
     minesLeftText.textContent = NUMBER_OF_MINES;
 
     generate(board, boardElement, boardSize);
@@ -102,18 +141,25 @@ function start() {
 
 // generate the board
 function generate(board, boardElement, boardSize) {
+    if (!boardElement) {
+        console.error("Board element is missing.");
+        return;
+    }
+
+    boardElement.innerHTML = ""; // Clear previous board
     startSound.play();
+
     board.forEach((row) => {
         row.forEach((tile) => {
             boardElement.append(tile.element);
+
             if (!gameHasEnded) {
                 tile.element.addEventListener("click", () => {
                     revealTile(board, tile);
                     addMoveHistory();
                     checkGameEnd(board);
                 });
-            }
-            if (!gameHasEnded) {
+
                 tile.element.addEventListener("contextmenu", (e) => {
                     e.preventDefault();
                     markTile(tile);
@@ -197,6 +243,7 @@ function markTile(tile) {
     moveHistory.push({ tile, statusBefore, contentBefore });
 }
 
+// reveal chosen tile
 function revealTile(board, tile) {
     if (tile.status !== TILE_STATUSES.HIDDEN) {
         return;
@@ -206,8 +253,7 @@ function revealTile(board, tile) {
     const contentBefore = tile.element.textContent;
 
     // Check if it's the first move
-    const isFirstMove =
-        moveHistory.length === 0 && thisClickHistory.length === 0;
+    const isFirstMove = moveHistory.length === 0 && thisClickHistory.length === 0;
 
     if (isFirstMove && tile.mine) {
         // If the first move is a mine, regenerate the board
@@ -215,6 +261,7 @@ function revealTile(board, tile) {
         return;
     }
 
+    // normal reveal logic
     tile.status = TILE_STATUSES.NUMBER;
     const nearbyTiles = adjacentTiles(board, tile);
     const mines = nearbyTiles.filter((t) => t.mine);

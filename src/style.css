@@ -81,12 +81,12 @@
     background-color: #bbb;
   }
 
-  .controll{
+  .control{
     color: #CCC;
     font-size: 20px;
   }
 
-  .board-size{
+  .control select{
     background-color: lightgray;
     font-size: 20px;
   }
